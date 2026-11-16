@@ -39,8 +39,9 @@ ufw allow 80/tcp comment 'Traefik HTTP Ingress'
 ufw allow 443/tcp comment 'Traefik HTTPS Ingress'
 ufw allow 22/tcp comment 'SSH Access'
 
-# Allow Docker API (port 2375) ONLY from VM 3 (Core Backend)
+# Allow Docker API (port 2375) and Orchestrator API (port 5050) ONLY from VM 3 (Core Backend)
 ufw allow from "$CORE_BACKEND_IP" to any port 2375 proto tcp comment 'Docker API from VM 3'
+ufw allow from "$CORE_BACKEND_IP" to any port 5050 proto tcp comment 'Challenge Orchestrator API from VM 3'
 echo "y" | ufw enable || true
 
 # 3. Pre-pull the target image to ensure instantaneous student environment spins

@@ -1,6 +1,6 @@
 # ==============================================================================
-# VM 5: Challenge Execution Host Orchestration (Deploy this on VM 5)
-# Runs Traefik Ingress + Docker Socket API Proxy for remote control by VM 3
+# VM 5: Challenge Execution Host & Proxmox Orchestration (Container 119)
+# Runs Traefik Ingress + Docker Socket API Proxy + Proxmox Provisioner Service
 # ==============================================================================
 
 networks:
@@ -10,7 +10,25 @@ networks:
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. Traefik v3 Dynamic Ingress Proxy
+  # 1. Challenge Provisioner & Proxmox Orchestrator API
+  # Responsible for creating Proxmox VMs / LXCs and Docker instances for CTF
+  # ----------------------------------------------------------------------------
+  challenge-orchestrator:
+    build: .
+    container_name: ctf_challenge_orchestrator
+    restart: always
+    ports:
+      - "5050:5050"
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - traefik_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ----------------------------------------------------------------------------
+  # 2. Traefik v3 Dynamic Ingress Proxy
   # Automatically detects dynamically spawned student containers on this VM
   # ----------------------------------------------------------------------------
   traefik:
@@ -36,23 +54,20 @@ services:
       - "traefik.http.services.dash.loadbalancer.server.port=8080"
 
   # ----------------------------------------------------------------------------
-  # 2. Remote Docker Socket Proxy
+  # 3. Remote Docker Socket Proxy
   # Exposes a sanitized Docker API on port 2375 over internal network to VM 3
-  # Prevents VM 3 from gaining full host root/volume escalation privileges
   # ----------------------------------------------------------------------------
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
     container_name: ctf_remote_socket_proxy
     restart: always
     environment:
-      # Grant ONLY container lifecycle & network inspect permissions to VM 3
       CONTAINERS: 1
       POST: 1
       DELETE: 1
       NETWORKS: 1
       INFO: 1
       VERSION: 1
-      # Deny all dangerous escape vectors
       VOLUMES: 0
       SWARM: 0
       SECRETS: 0
@@ -63,6 +78,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      # Bind to internal Proxmox subnet IP only (e.g. 192.168.200.15:2375)
       - "2375:2375"
-
+    networks:
+      - traefik_net
