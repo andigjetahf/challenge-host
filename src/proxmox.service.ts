@@ -47,7 +47,7 @@ export class ProxmoxService {
     this.client.interceptors.request.use(async (req) => {
       if (this.config.tokenId && this.config.tokenSecret) {
         req.headers['Authorization'] = `PVEAPIToken=${this.config.tokenId}=${this.config.tokenSecret}`;
-      } else if (this.config.username && this.config.password) {
+      } else if (this.config.password) {
         await this.ensureTicket();
         if (this.ticket) {
           req.headers['Cookie'] = `PVEAuthCookie=${this.ticket}`;
