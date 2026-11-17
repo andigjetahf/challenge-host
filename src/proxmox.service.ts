@@ -260,13 +260,17 @@ export class ProxmoxService {
     // Wait for clone task
     await new Promise((r) => setTimeout(r, 6000));
 
-    // 2. Configure Hardware (Cores, RAM)
+    // 2. Configure Hardware (Cores, RAM) & Dynamic IP / Cloud-Init
     const configPayload: Record<string, any> = {};
     if (specs.cores) configPayload.cores = specs.cores;
     if (specs.memoryMB) configPayload.memory = specs.memoryMB;
 
+    // Dynamically assign IP for QEMU VM (supports Cloud-Init or DHCP fallback)
+    const assignedIp = await this.getAvailableIp();
+    configPayload.ipconfig0 = `ip=${assignedIp}/24,gw=192.168.200.1`;
+
     if (Object.keys(configPayload).length > 0) {
-      console.log(`[ProxmoxService] Setting hardware config on VM ${vmid}:`, configPayload);
+      console.log(`[ProxmoxService] Setting hardware & dynamic IP (${assignedIp}) on VM ${vmid}:`, configPayload);
       try {
         await this.client.put(`/nodes/${targetNode}/qemu/${vmid}/config`, configPayload);
       } catch (cfgErr: any) {
@@ -278,8 +282,9 @@ export class ProxmoxService {
     console.log(`[ProxmoxService] Starting QEMU VM ${vmid}...`);
     await this.client.post(`/nodes/${targetNode}/qemu/${vmid}/status/start`);
 
-    // 4. Poll for IP via Guest Agent or network interfaces
-    const ipAddress = await this.pollVmIp(targetNode, vmid);
+    // 4. Poll for IP via Guest Agent or use assigned IP immediately
+    const polledIp = await this.pollVmIp(targetNode, vmid);
+    const ipAddress = polledIp || assignedIp;
 
     return {
       vmid,
