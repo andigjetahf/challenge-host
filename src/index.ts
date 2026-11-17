@@ -62,7 +62,9 @@ app.post('/api/provision', async (req: Request, res: Response) => {
     const runtimeType = challenge.runtimeType || 'PROXMOX_CT';
     const targetNode = challenge.proxmoxNode || process.env.PROXMOX_DEFAULT_NODE || 'pms1';
     const templateId = challenge.templateId ? parseInt(challenge.templateId, 10) : 101;
-    const rawSubdomain = `${username || 'user'}-${(challenge.slug || challenge.id).slice(0, 12)}`
+    // Add random 4-char suffix so recreations or parallel runs never collide on subdomain/containerName
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    const rawSubdomain = `${username || 'user'}-${(challenge.slug || challenge.id).slice(0, 8)}-${randomSuffix}`
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-');
     const containerName = `ctf-${rawSubdomain}`;
