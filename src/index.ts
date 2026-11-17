@@ -14,7 +14,7 @@ app.use(express.json());
 
 // Proxmox Service Instance
 const proxmox = new ProxmoxService({
-  baseUrl: process.env.PROXMOX_API_URL || 'https://192.168.200.12:8006/api2/json',
+  baseUrl: process.env.PROXMOX_API_URL || 'https://192.168.200.201:8006/api2/json',
   tokenId: process.env.PROXMOX_TOKEN_ID,
   tokenSecret: process.env.PROXMOX_TOKEN_SECRET,
   username: process.env.PROXMOX_USERNAME || 'root@pam',
