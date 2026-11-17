@@ -404,25 +404,31 @@ export class ProxmoxService {
   }
 
   /**
-   * Auto-discover all available templates in Proxmox (LXC CTs & QEMU VMs)
+   * Auto-discover all available templates and candidate source machines in Proxmox (LXC CTs & QEMU VMs)
    */
   async getTemplates(): Promise<any[]> {
     try {
       const res = await this.client.get('/cluster/resources?type=vm');
       const items = res.data?.data || [];
-      // Filter for templates (template === 1) or specific template prefixes
+      // Return templates (template === 1) as well as candidate base source images (e.g. 101, 102, 103, 114)
       const templates = items
-        .filter((item: any) => item.template === 1 || item.template === true || (item.name && item.name.toLowerCase().includes('template')))
         .map((t: any) => ({
           vmid: t.vmid,
-          name: t.name || `Template ${t.vmid}`,
+          name: t.name || `Machine ${t.vmid}`,
           type: t.type === 'lxc' ? 'PROXMOX_CT' : 'PROXMOX_VM',
           node: t.node,
           status: t.status,
+          isTemplate: t.template === 1 || t.template === true,
           maxcpu: t.maxcpu || 1,
           maxmemMB: t.maxmem ? Math.round(t.maxmem / (1024 * 1024)) : 1024,
           maxdiskGB: t.maxdisk ? Math.round(t.maxdisk / (1024 * 1024 * 1024)) : 8,
-        }));
+        }))
+        // Sort: real templates first, then by VMID ascending
+        .sort((a: any, b: any) => {
+          if (a.isTemplate && !b.isTemplate) return -1;
+          if (!a.isTemplate && b.isTemplate) return 1;
+          return a.vmid - b.vmid;
+        });
       return templates;
     } catch (err: any) {
       console.warn('[ProxmoxService] Failed to auto-discover templates:', err?.message || err);
