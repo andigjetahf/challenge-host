@@ -20,7 +20,7 @@ const proxmox = new ProxmoxService({
   username: process.env.PROXMOX_USERNAME || 'root@pam',
   password: process.env.PROXMOX_PASSWORD,
   defaultNode: process.env.PROXMOX_DEFAULT_NODE || 'pms1',
-  defaultStorage: process.env.PROXMOX_DEFAULT_STORAGE || 'local-lvm',
+  defaultStorage: process.env.PROXMOX_DEFAULT_STORAGE || 'TrueNas',
   defaultBridge: process.env.PROXMOX_DEFAULT_BRIDGE || 'vmbr0',
 });
 
