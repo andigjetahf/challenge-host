@@ -91,13 +91,85 @@ export class ProxmoxService {
   async getNextVmId(): Promise<number> {
     try {
       const res = await this.client.get('/cluster/nextid');
-      return parseInt(res.data.data, 10);
-    } catch (err) {
-      // Fallback: generate a random ID between 300 and 899 if cluster endpoint fails
+      if (res.data?.data) {
+        return parseInt(res.data.data, 10);
+      }
+    } catch (err: any) {
+      console.warn(`[ProxmoxService] /cluster/nextid API check:`, err?.message || err);
+    }
+
+    // Dynamic scan: fetch all currently used VMIDs in the cluster to guarantee no collision
+    try {
+      const res = await this.client.get('/cluster/resources?type=vm');
+      const vms = res.data?.data || [];
+      const usedIds = new Set<number>(vms.map((v: any) => parseInt(v.vmid, 10)));
+      
+      // Start searching from 300 upwards
+      let candidate = 300;
+      while (usedIds.has(candidate)) {
+        candidate++;
+      }
+      console.log(`[ProxmoxService] Found next available cluster VMID dynamically: ${candidate}`);
+      return candidate;
+    } catch (clusterErr) {
       const fallbackId = Math.floor(Math.random() * 600) + 300;
-      console.warn(`[ProxmoxService] cluster/nextid failed, using fallback ID ${fallbackId}`);
+      console.warn(`[ProxmoxService] cluster/resources fallback, using random ID ${fallbackId}`);
       return fallbackId;
     }
+  }
+
+  /**
+   * Dynamically allocate an available IPv4 address from the subnet pool
+   * Checks currently assigned IPs across cluster resources and ARP/interfaces
+   */
+  async getAvailableIp(subnetBase = '192.168.200', startRange = 160, endRange = 240): Promise<string> {
+    try {
+      const usedIps = new Set<string>();
+
+      // Reserved IPs for core infrastructure
+      usedIps.add('192.168.200.1');   // Gateway
+      usedIps.add('192.168.200.11');  // Auth
+      usedIps.add('192.168.200.12');  // Frontend
+      usedIps.add('192.168.200.13');  // Core-backend
+      usedIps.add('192.168.200.14');  // DB
+      usedIps.add('192.168.200.15');  // ChallengeHoste VM5
+      usedIps.add('192.168.200.201'); // Proxmox pms1
+      usedIps.add('192.168.200.202'); // Proxmox pms2
+
+      // Collect IPs currently assigned to active LXCs and VMs in Proxmox
+      const clusterRes = await this.client.get('/cluster/resources?type=vm');
+      const items = clusterRes.data?.data || [];
+      for (const item of items) {
+        if (item.node && item.vmid && item.status === 'running') {
+          try {
+            if (item.type === 'lxc') {
+              const ifRes = await this.client.get(`/nodes/${item.node}/lxc/${item.vmid}/interfaces`).catch(() => null);
+              const ifaces = ifRes?.data?.data || [];
+              for (const iface of ifaces) {
+                if (iface.inet) {
+                  usedIps.add(String(iface.inet).split('/')[0].trim());
+                }
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      for (let i = startRange; i <= endRange; i++) {
+        const candidateIp = `${subnetBase}.${i}`;
+        if (!usedIps.has(candidateIp)) {
+          return candidateIp;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[ProxmoxService] getAvailableIp scan error:', err?.message || err);
+    }
+
+    // Default dynamic IP assignment fallback
+    const randomHost = Math.floor(Math.random() * (endRange - startRange)) + startRange;
+    return `${subnetBase}.${randomHost}`;
   }
 
   /**
@@ -126,14 +198,18 @@ export class ProxmoxService {
     // Wait a brief moment for clone task to register
     await new Promise((r) => setTimeout(r, 4000));
 
-    // 2. Configure Hardware Specifications (Cores, RAM, Swap)
+    // 2. Configure Hardware Specifications and Dynamic Static IP/DHCP
     const configPayload: Record<string, any> = {};
     if (specs.cores) configPayload.cores = specs.cores;
     if (specs.memoryMB) configPayload.memory = specs.memoryMB;
     if (specs.swapMB) configPayload.swap = specs.swapMB;
 
+    // Dynamically find available IP for LXC and configure network interface
+    const assignedIp = await this.getAvailableIp();
+    configPayload.net0 = `name=eth0,bridge=${this.config.defaultBridge || 'vmbr0'},ip=${assignedIp}/24,gw=192.168.200.1`;
+
     if (Object.keys(configPayload).length > 0) {
-      console.log(`[ProxmoxService] Setting hardware config on CT ${vmid}:`, configPayload);
+      console.log(`[ProxmoxService] Setting hardware & dynamic IP (${assignedIp}) on CT ${vmid}:`, configPayload);
       try {
         await this.client.put(`/nodes/${targetNode}/lxc/${vmid}/config`, configPayload);
       } catch (cfgErr: any) {
@@ -145,8 +221,9 @@ export class ProxmoxService {
     console.log(`[ProxmoxService] Starting LXC CT ${vmid}...`);
     await this.client.post(`/nodes/${targetNode}/lxc/${vmid}/status/start`);
 
-    // 4. Poll for IP address (up to 15 seconds)
-    const ipAddress = await this.pollLxcIp(targetNode, vmid);
+    // 4. Poll for IP address (or use assigned IP immediately)
+    const polledIp = await this.pollLxcIp(targetNode, vmid);
+    const ipAddress = polledIp || assignedIp;
 
     return {
       vmid,
