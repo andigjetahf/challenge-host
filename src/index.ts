@@ -47,6 +47,30 @@ app.get('/api/nodes', async (_req: Request, res: Response) => {
 });
 
 /**
+ * Auto-discover Templates available in Proxmox (LXC / QEMU)
+ */
+app.get('/api/templates', async (_req: Request, res: Response) => {
+  try {
+    const templates = await proxmox.getTemplates();
+    res.status(200).json(templates);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch Proxmox templates', details: err?.message });
+  }
+});
+
+/**
+ * Auto-discover Storages available in Proxmox
+ */
+app.get('/api/storages', async (_req: Request, res: Response) => {
+  try {
+    const storages = await proxmox.getStorages();
+    res.status(200).json(storages);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch Proxmox storages', details: err?.message });
+  }
+});
+
+/**
  * Main Provisioning Endpoint:
  * ChallengeHoste is responsible for provisioning instances in Proxmox or Docker!
  */

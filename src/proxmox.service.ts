@@ -402,4 +402,54 @@ export class ProxmoxService {
       ];
     }
   }
+
+  /**
+   * Auto-discover all available templates in Proxmox (LXC CTs & QEMU VMs)
+   */
+  async getTemplates(): Promise<any[]> {
+    try {
+      const res = await this.client.get('/cluster/resources?type=vm');
+      const items = res.data?.data || [];
+      // Filter for templates (template === 1) or specific template prefixes
+      const templates = items
+        .filter((item: any) => item.template === 1 || item.template === true || (item.name && item.name.toLowerCase().includes('template')))
+        .map((t: any) => ({
+          vmid: t.vmid,
+          name: t.name || `Template ${t.vmid}`,
+          type: t.type === 'lxc' ? 'PROXMOX_CT' : 'PROXMOX_VM',
+          node: t.node,
+          status: t.status,
+          maxcpu: t.maxcpu || 1,
+          maxmemMB: t.maxmem ? Math.round(t.maxmem / (1024 * 1024)) : 1024,
+          maxdiskGB: t.maxdisk ? Math.round(t.maxdisk / (1024 * 1024 * 1024)) : 8,
+        }));
+      return templates;
+    } catch (err: any) {
+      console.warn('[ProxmoxService] Failed to auto-discover templates:', err?.message || err);
+      return [];
+    }
+  }
+
+  /**
+   * Auto-discover all available storages across the Proxmox cluster
+   */
+  async getStorages(): Promise<any[]> {
+    try {
+      const res = await this.client.get('/storage');
+      const storages = res.data?.data || [];
+      return storages.map((s: any) => ({
+        storage: s.storage,
+        type: s.type,
+        content: s.content,
+        shared: s.shared === 1,
+      }));
+    } catch (err: any) {
+      console.warn('[ProxmoxService] Failed to auto-discover storages:', err?.message || err);
+      return [
+        { storage: 'TrueNas', type: 'nfs', shared: true },
+        { storage: 'local-lvm', type: 'lvmthin', shared: false },
+        { storage: 'local', type: 'dir', shared: false },
+      ];
+    }
+  }
 }
