@@ -211,7 +211,7 @@ export class ProxmoxService {
 
 
     if (Object.keys(configPayload).length > 0) {
-      console.log(`[ProxmoxService] Setting hardware & dynamic IP (${assignedIp}) on CT ${vmid}:`, configPayload);
+      console.log(`[ProxmoxService] Setting hardware & DHCP on CT ${vmid}:`, configPayload);
       try {
         await this.client.put(`/nodes/${targetNode}/lxc/${vmid}/config`, configPayload);
       } catch (cfgErr: any) {
