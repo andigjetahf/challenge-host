@@ -206,9 +206,9 @@ export class ProxmoxService {
     if (specs.memoryMB) configPayload.memory = specs.memoryMB;
     if (specs.swapMB) configPayload.swap = specs.swapMB;
 
-    // Dynamically find available IP for LXC and configure network interface
-    const assignedIp = await this.getAvailableIp();
-    configPayload.net0 = `name=eth0,bridge=${this.config.defaultBridge || 'vmbr0'},ip=${assignedIp}/24,gw=192.168.200.1`;
+    // Use DHCP for IP allocation (Proxmox will request an IP via DHCP)
+    configPayload.net0 = `name=eth0,bridge=${this.config.defaultBridge || 'vmbr0'},ip=dhcp`;
+
 
     if (Object.keys(configPayload).length > 0) {
       console.log(`[ProxmoxService] Setting hardware & dynamic IP (${assignedIp}) on CT ${vmid}:`, configPayload);
