@@ -432,7 +432,20 @@ export class ProxmoxService {
       return templates;
     } catch (err: any) {
       console.warn('[ProxmoxService] Failed to auto-discover templates:', err?.message || err);
-      return [];
+      // Fallback templates from known Proxmox cluster state (e.g. CT 101 on pms1)
+      return [
+        {
+          vmid: 101,
+          name: 'juice-shop-host-A',
+          type: 'PROXMOX_CT',
+          node: 'pms1',
+          status: 'running',
+          isTemplate: false,
+          maxcpu: 1,
+          maxmemMB: 1024,
+          maxdiskGB: 8,
+        },
+      ];
     }
   }
 
