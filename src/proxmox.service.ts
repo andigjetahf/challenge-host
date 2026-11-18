@@ -225,7 +225,7 @@ export class ProxmoxService {
 
     // 4. Poll for IP address (or use assigned IP immediately)
     const polledIp = await this.pollLxcIp(targetNode, vmid);
-    const ipAddress = polledIp || assignedIp;
+    const ipAddress = polledIp;
 
     return {
       vmid,
@@ -286,7 +286,7 @@ export class ProxmoxService {
 
     // 4. Poll for IP via Guest Agent or use assigned IP immediately
     const polledIp = await this.pollVmIp(targetNode, vmid);
-    const ipAddress = polledIp || assignedIp;
+    const ipAddress = polledIp;
 
     return {
       vmid,
